@@ -85,24 +85,24 @@ class ObjImporter : Importer {
             when (faceVertex.size) {
                 // f v1
                 1 -> {
-                    data.currentGroup.faces += faceVertex[0].toInt() - 1
-                    data.currentGroup.faces += 0
-                    data.currentGroup.faces += 0
+                    data.currentGroup.currentSubGroup.faces += faceVertex[0].toInt() - 1
+                    data.currentGroup.currentSubGroup.faces += 0
+                    data.currentGroup.currentSubGroup.faces += 0
                 }
 
                 // f v1/vt1
                 2 -> {
-                    data.currentGroup.faces += faceVertex[0].toInt() - 1
-                    data.currentGroup.faces += 0
-                    data.currentGroup.faces += faceVertex[1].toInt() - 1
+                    data.currentGroup.currentSubGroup.faces += faceVertex[0].toInt() - 1
+                    data.currentGroup.currentSubGroup.faces += 0
+                    data.currentGroup.currentSubGroup.faces += faceVertex[1].toInt() - 1
                 }
 
                 // f v1//vn1
                 // f v1/vt1/vn1
                 3 -> {
-                    data.currentGroup.faces += faceVertex[0].toInt() - 1
-                    data.currentGroup.faces += faceVertex[2].toInt() - 1
-                    data.currentGroup.faces += (faceVertex[1].toIntOrNull() ?: 1) - 1
+                    data.currentGroup.currentSubGroup.faces += faceVertex[0].toInt() - 1
+                    data.currentGroup.currentSubGroup.faces += faceVertex[2].toInt() - 1
+                    data.currentGroup.currentSubGroup.faces += (faceVertex[1].toIntOrNull() ?: 1) - 1
                 }
             }
         }
@@ -118,10 +118,12 @@ class ObjImporter : Importer {
         }
 
         private fun parseUseMaterial(tokens: List<String>, data: ObjData) {
-            data.currentGroup.material = data.materials[tokens[0]]
+            data.currentGroup.subGroups += SubGroup()
+
+            data.currentGroup.currentSubGroup.material = data.materials[tokens[0]]
                     ?: throw RuntimeException("Material with name ${tokens[0]} not found")
 
-            data.currentGroup.ambientColor = data.ambientColors[data.currentGroup.material]
+            data.currentGroup.currentSubGroup.ambientColor = data.ambientColors[data.currentGroup.currentSubGroup.material]
         }
 
         private fun List<String>.toFloats2(): List<Float> {
@@ -208,37 +210,52 @@ class ObjImporter : Importer {
             val modelRoot = Group()
 
             data.groups.forEach {
-                println("Group: ${it.name}")
+                //println("Group: ${it.name}")
 
-                val mesh = TriangleMesh(VertexFormat.POINT_NORMAL_TEXCOORD)
+                val groupRoot = Group()
 
-                mesh.points.addAll(*data.vertices.map { it * 6 }.toFloatArray())
+                it.subGroups.forEach {
 
-                // if there are no vertex textures, just add 2 values
-                if (data.vertexTextures.isEmpty()) {
-                    mesh.texCoords.addAll(*FloatArray(2) { _ -> 0.0f})
-                } else {
-                    mesh.texCoords.addAll(*data.vertexTextures.toFloatArray())
+                    // TODO: ?
+                    if (!it.faces.isEmpty()) {
+
+                        val subGroupRoot = Group()
+
+                        val mesh = TriangleMesh(VertexFormat.POINT_NORMAL_TEXCOORD)
+
+                        mesh.points.addAll(*data.vertices.map { it * 9 }.toFloatArray())
+
+                        // if there are no vertex textures, just add 2 values
+                        if (data.vertexTextures.isEmpty()) {
+                            mesh.texCoords.addAll(*FloatArray(2) { _ -> 0.0f })
+                        } else {
+                            mesh.texCoords.addAll(*data.vertexTextures.toFloatArray())
+                        }
+
+                        // if there are no vertex normals, just add 3 values
+                        if (data.vertexNormals.isEmpty()) {
+                            mesh.normals.addAll(*FloatArray(3) { _ -> 0.0f })
+                        } else {
+                            mesh.normals.addAll(*data.vertexNormals.toFloatArray())
+                        }
+
+                        mesh.faces.addAll(*it.faces.toIntArray())
+
+                        val view = MeshView(mesh)
+                        view.material = it.material
+
+                        //println(view.material)
+
+                        val light = AmbientLight()
+                        light.color = it.ambientColor
+
+                        subGroupRoot.children.addAll(view, light)
+
+                        groupRoot.children += subGroupRoot
+                    }
                 }
 
-                // if there are no vertex normals, just add 3 values
-                if (data.vertexNormals.isEmpty()) {
-                    mesh.normals.addAll(*FloatArray(3) { _ -> 0.0f})
-                } else {
-                    mesh.normals.addAll(*data.vertexNormals.toFloatArray())
-                }
-
-                mesh.faces.addAll(*it.faces.toIntArray())
-
-                val view = MeshView(mesh)
-                view.material = it.material
-
-                val light = AmbientLight()
-                light.color = it.ambientColor
-
-                val viewGroup = Group(view, light)
-
-                modelRoot.children += viewGroup
+                modelRoot.children += groupRoot
             }
 
             return modelRoot

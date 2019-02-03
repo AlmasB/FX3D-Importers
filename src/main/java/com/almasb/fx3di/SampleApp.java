@@ -6,6 +6,7 @@ import javafx.scene.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Rotate;
+import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
 
 /**
@@ -17,18 +18,31 @@ public class SampleApp extends Application {
 
     private Scene createScene() {
         PerspectiveCamera camera = new PerspectiveCamera(true);
-        camera.setTranslateY(0);
+        camera.setTranslateY(-1.1);
         camera.setTranslateZ(-4.5);
 
-        Group model = new ObjImporter().load(getClass().getResource("obj/DukeKing.obj"));
+        String[] modelNames = new String[] {
+                "DukeKing.obj"
+        };
 
-        model.getTransforms().add(rotate);
+        Group root = new Group();
+
+        int i = 0;
+        for (var name : modelNames) {
+            Group model = new ObjImporter().load(getClass().getResource("obj/" + name));
+
+            model.getTransforms().addAll(rotate, new Rotate(-180, Rotate.X_AXIS), new Translate(i*2, 0, 0));
+
+            root.getChildren().add(model);
+
+            i++;
+        }
 
         var light = new PointLight();
         light.setTranslateX(-2);
         light.setTranslateZ(-2);
 
-        Group root = new Group(model, light);
+        root.getChildren().add(light);
 
         SubScene scene = new SubScene(root, 1280, 720, true, SceneAntialiasing.BALANCED);
         scene.setCamera(camera);
@@ -42,11 +56,11 @@ public class SampleApp extends Application {
         stage.getScene().setOnKeyPressed(e -> {
             switch (e.getCode()) {
                 case A:
-                    rotate.setAngle(rotate.getAngle() + 2);
+                    rotate.setAngle(rotate.getAngle() - 2);
                     break;
 
                 case D:
-                    rotate.setAngle(rotate.getAngle() - 2);
+                    rotate.setAngle(rotate.getAngle() + 2);
                     break;
             }
         });

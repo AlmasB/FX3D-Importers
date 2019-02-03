@@ -18,6 +18,8 @@ internal class ObjData(val url: URL) {
     val materials = hashMapOf<String, Material>()
     val ambientColors = hashMapOf<Material, Color>()
 
+    var currentUseMaterial = PhongMaterial(Color.WHITE)
+
     val currentGroup: ObjGroup
         get() {
             // it is possible there are no groups in the obj file,
@@ -30,11 +32,17 @@ internal class ObjData(val url: URL) {
 }
 
 internal class ObjGroup(val name: String) {
+    val subGroups = arrayListOf<SubGroup>(SubGroup())
+
+    val currentSubGroup
+        get() = subGroups.last()
+}
+
+internal class SubGroup {
     val faces = arrayListOf<Int>()
 
     // as per OBJ file spec, default is white
     var material: Material = PhongMaterial(Color.WHITE)
-
     var ambientColor = Color.WHITE
 }
 
