@@ -18,7 +18,7 @@ public class SampleApp extends Application {
         camera.setTranslateY(0);
         camera.setTranslateZ(-4.5);
 
-        Group model = new ObjImporter().load(getClass().getResource("obj/DukeKing.obj"));
+        Group model = new ObjImporter().load(getClass().getResource("obj/gourd.obj"));
 
         model.getTransforms().add(rotate);
 

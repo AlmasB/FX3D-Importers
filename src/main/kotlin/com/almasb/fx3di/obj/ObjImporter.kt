@@ -48,6 +48,11 @@ class ObjImporter : Importer {
         }
 
         private fun parseFaces(tokens: List<String>, data: ObjData) {
+            // it is possible there are no groups in the obj file
+            if (data.groups.isEmpty()) {
+                data.groups += ObjGroup("default")
+            }
+
             tokens.forEachIndexed { i, token ->
 
                 // dealing with a quad, so before parsing 4th face vertex
@@ -125,7 +130,13 @@ class ObjImporter : Importer {
                     mesh.texCoords.addAll(*data.vertexTextures.toFloatArray())
                 }
 
-                mesh.normals.addAll(*data.vertexNormals.toFloatArray())
+                // if there are no vertex normals, just add 3 values
+                if (data.vertexNormals.isEmpty()) {
+                    mesh.normals.addAll(*FloatArray(3) { _ -> 0.0f})
+                } else {
+                    mesh.normals.addAll(*data.vertexNormals.toFloatArray())
+                }
+
                 mesh.faces.addAll(*it.faces.toIntArray())
 
                 val view = MeshView(mesh)
