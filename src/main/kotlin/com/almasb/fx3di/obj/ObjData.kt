@@ -8,6 +8,7 @@ internal class ObjData {
     val groups = arrayListOf<ObjGroup>()
     val vertices = arrayListOf<Float>()
     val vertexNormals = arrayListOf<Float>()
+    val vertexTextures = arrayListOf<Float>()
 
     val currentGroup
         get() = groups.last()
