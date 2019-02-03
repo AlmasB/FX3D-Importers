@@ -3,6 +3,8 @@ package com.almasb.fx3di;
 import com.almasb.fx3di.obj.ObjImporter;
 import javafx.application.Application;
 import javafx.scene.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Rotate;
 import javafx.stage.Stage;
 
@@ -18,7 +20,7 @@ public class SampleApp extends Application {
         camera.setTranslateY(0);
         camera.setTranslateZ(-4.5);
 
-        Group model = new ObjImporter().load(getClass().getResource("obj/gourd.obj"));
+        Group model = new ObjImporter().load(getClass().getResource("obj/DukeKing.obj"));
 
         model.getTransforms().add(rotate);
 
@@ -28,10 +30,10 @@ public class SampleApp extends Application {
 
         Group root = new Group(model, light);
 
-        Scene scene = new Scene(root, 1280, 720, true);
+        SubScene scene = new SubScene(root, 1280, 720, true, SceneAntialiasing.BALANCED);
         scene.setCamera(camera);
 
-        return scene;
+        return new Scene(new Group(new Rectangle(1280, 720, Color.LIGHTGRAY), scene));
     }
 
     @Override

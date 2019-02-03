@@ -1,6 +1,7 @@
 package com.almasb.fx3di.obj
 
 import com.almasb.fx3di.Importer
+import javafx.scene.AmbientLight
 import javafx.scene.Group
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
@@ -17,14 +18,23 @@ import java.net.URL
 class ObjImporter : Importer {
 
     companion object {
-        private val lineParsers = linkedMapOf<(String) -> Boolean, (List<String>, ObjData) -> Unit>()
+        private val objParsers = linkedMapOf<(String) -> Boolean, (List<String>, ObjData) -> Unit>()
+        private val mtlParsers = linkedMapOf<(String) -> Boolean, (List<String>, MtlData) -> Unit>()
 
         init {
-            lineParsers[ { it.startsWith("g") }  ] = ::parseGroup
-            lineParsers[ { it.startsWith("vt") }  ] = ::parseVertexTextures
-            lineParsers[ { it.startsWith("vn") }  ] = ::parseVertexNormals
-            lineParsers[ { it.startsWith("v ") }  ] = ::parseVertices
-            lineParsers[ { it.startsWith("f") }  ] = ::parseFaces
+            objParsers[ { it.startsWith("g") }  ] = ::parseGroup
+            objParsers[ { it.startsWith("vt") }  ] = ::parseVertexTextures
+            objParsers[ { it.startsWith("vn") }  ] = ::parseVertexNormals
+            objParsers[ { it.startsWith("v ") }  ] = ::parseVertices
+            objParsers[ { it.startsWith("f") }  ] = ::parseFaces
+            objParsers[ { it.startsWith("mtllib") }  ] = ::parseMaterialLib
+            objParsers[ { it.startsWith("usemtl") }  ] = ::parseUseMaterial
+
+            mtlParsers[ { it.startsWith("newmtl") }  ] = ::parseNewMaterial
+            mtlParsers[ { it.startsWith("Ka") }  ] = ::parseColorAmbient
+            mtlParsers[ { it.startsWith("Kd") }  ] = ::parseColorDiffuse
+            mtlParsers[ { it.startsWith("Ks") }  ] = ::parseColorSpecular
+            mtlParsers[ { it.startsWith("Ns") }  ] = ::parseSpecularPower
         }
 
         private fun parseGroup(tokens: List<String>, data: ObjData) {
@@ -48,11 +58,6 @@ class ObjImporter : Importer {
         }
 
         private fun parseFaces(tokens: List<String>, data: ObjData) {
-            // it is possible there are no groups in the obj file
-            if (data.groups.isEmpty()) {
-                data.groups += ObjGroup("default")
-            }
-
             tokens.forEachIndexed { i, token ->
 
                 // dealing with a quad, so before parsing 4th face vertex
@@ -102,12 +107,98 @@ class ObjImporter : Importer {
             }
         }
 
+        private fun parseMaterialLib(tokens: List<String>, data: ObjData) {
+            val fileName = tokens[0]
+            val mtlURL = URL(data.url.toExternalForm().substringBeforeLast('/') + '/' + fileName)
+
+            val mtlData = loadMtlData(mtlURL)
+
+            data.materials += mtlData.materials
+            data.ambientColors += mtlData.ambientColors
+        }
+
+        private fun parseUseMaterial(tokens: List<String>, data: ObjData) {
+            data.currentGroup.material = data.materials[tokens[0]]
+                    ?: throw RuntimeException("Material with name ${tokens[0]} not found")
+
+            data.currentGroup.ambientColor = data.ambientColors[data.currentGroup.material]
+        }
+
         private fun List<String>.toFloats2(): List<Float> {
             return this.take(2).map { it.toFloat() }
         }
 
         private fun List<String>.toFloats3(): List<Float> {
             return this.take(3).map { it.toFloat() }
+        }
+
+        private fun List<String>.toColor(): Color {
+            val rgb = this.toFloats3().map { if (it > 1.0) 1.0 else it.toDouble() }
+            return Color.color(rgb[0], rgb[1], rgb[2])
+        }
+
+        private fun parseNewMaterial(tokens: List<String>, data: MtlData) {
+            data.currentMaterial = PhongMaterial()
+            data.materials[tokens[0]] = data.currentMaterial
+        }
+
+        private fun parseColorAmbient(tokens: List<String>, data: MtlData) {
+            data.ambientColors[data.currentMaterial] = tokens.toColor()
+        }
+
+        private fun parseColorDiffuse(tokens: List<String>, data: MtlData) {
+            data.currentMaterial.diffuseColor = tokens.toColor()
+        }
+
+        private fun parseColorSpecular(tokens: List<String>, data: MtlData) {
+            data.currentMaterial.specularColor = tokens.toColor()
+        }
+
+        private fun parseSpecularPower(tokens: List<String>, data: MtlData) {
+            data.currentMaterial.specularPower = tokens[0].toDouble()
+        }
+
+        // TODO: refactor loadXXXData below
+        private fun loadObjData(url: URL): ObjData {
+            val data = ObjData(url)
+
+            url.openStream().bufferedReader().useLines {
+                it.forEach { line ->
+
+                    for ((condition, action) in objParsers) {
+                        if (condition.invoke(line) ) {
+                            // drop identifier
+                            val tokens = line.split(" +".toRegex()).drop(1)
+
+                            action.invoke(tokens, data)
+                            break
+                        }
+                    }
+                }
+            }
+
+            return data
+        }
+
+        private fun loadMtlData(url: URL): MtlData {
+            val data = MtlData()
+
+            url.openStream().bufferedReader().useLines {
+                it.forEach { line ->
+
+                    for ((condition, action) in mtlParsers) {
+                        if (condition.invoke(line) ) {
+                            // drop identifier
+                            val tokens = line.split(" +".toRegex()).drop(1)
+
+                            action.invoke(tokens, data)
+                            break
+                        }
+                    }
+                }
+            }
+
+            return data
         }
     }
 
@@ -121,7 +212,7 @@ class ObjImporter : Importer {
 
                 val mesh = TriangleMesh(VertexFormat.POINT_NORMAL_TEXCOORD)
 
-                mesh.points.addAll(*data.vertices.map { it * 1 }.toFloatArray())
+                mesh.points.addAll(*data.vertices.map { it * 6 }.toFloatArray())
 
                 // if there are no vertex textures, just add 2 values
                 if (data.vertexTextures.isEmpty()) {
@@ -140,10 +231,14 @@ class ObjImporter : Importer {
                 mesh.faces.addAll(*it.faces.toIntArray())
 
                 val view = MeshView(mesh)
-                //view.cullFace = CullFace.NONE
-                view.material = PhongMaterial(Color.BLUE)
+                view.material = it.material
 
-                modelRoot.children += view
+                val light = AmbientLight()
+                light.color = it.ambientColor
+
+                val viewGroup = Group(view, light)
+
+                modelRoot.children += viewGroup
             }
 
             return modelRoot
@@ -151,26 +246,5 @@ class ObjImporter : Importer {
             e.printStackTrace()
             throw RuntimeException("Load failed for URL: $url Error: $e")
         }
-    }
-
-    private fun loadObjData(url: URL): ObjData {
-        val data = ObjData()
-
-        url.openStream().bufferedReader().useLines {
-            it.forEach { line ->
-
-                for ((condition, action) in lineParsers) {
-                    if (condition.invoke(line) ) {
-                        // drop identifier
-                        val tokens = line.split(" +".toRegex()).drop(1)
-
-                        action.invoke(tokens, data)
-                        break
-                    }
-                }
-            }
-        }
-
-        return data
     }
 }
