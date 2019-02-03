@@ -5,6 +5,7 @@ import javafx.scene.AmbientLight
 import javafx.scene.Group
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
+import javafx.scene.shape.CullFace
 import javafx.scene.shape.MeshView
 import javafx.scene.shape.TriangleMesh
 import javafx.scene.shape.VertexFormat
@@ -58,16 +59,16 @@ class ObjImporter : Importer {
         }
 
         private fun parseFaces(tokens: List<String>, data: ObjData) {
-            tokens.forEachIndexed { i, token ->
-
-                // dealing with a quad, so before parsing 4th face vertex
-                // add 1st (0) and 3rd (2) face vertices
-                if (i == 3) {
+            if (tokens.size > 3) {
+                for (i in 2 until tokens.size) {
                     parseFaceVertex(tokens[0], data)
-                    parseFaceVertex(tokens[2], data)
+                    parseFaceVertex(tokens[i-1], data)
+                    parseFaceVertex(tokens[i], data)
                 }
-
-                parseFaceVertex(token, data)
+            } else {
+                tokens.forEach { token ->
+                    parseFaceVertex(token, data)
+                }
             }
         }
 
@@ -210,9 +211,10 @@ class ObjImporter : Importer {
             val modelRoot = Group()
 
             data.groups.forEach {
-                //println("Group: ${it.name}")
+                println("Group: ${it.name}")
 
                 val groupRoot = Group()
+                groupRoot.properties["name"] = it.name
 
                 it.subGroups.forEach {
 
@@ -223,7 +225,7 @@ class ObjImporter : Importer {
 
                         val mesh = TriangleMesh(VertexFormat.POINT_NORMAL_TEXCOORD)
 
-                        mesh.points.addAll(*data.vertices.map { it * 9 }.toFloatArray())
+                        mesh.points.addAll(*data.vertices.map { it * 0.05f }.toFloatArray())
 
                         // if there are no vertex textures, just add 2 values
                         if (data.vertexTextures.isEmpty()) {
@@ -243,15 +245,18 @@ class ObjImporter : Importer {
 
                         val view = MeshView(mesh)
                         view.material = it.material
+                        view.cullFace = CullFace.NONE
 
-                        //println(view.material)
+                        subGroupRoot.children.addAll(view)
 
-                        val light = AmbientLight()
-                        light.color = it.ambientColor
+                        it.ambientColor?.let {
+                            val light = AmbientLight()
+                            light.color = it
 
-                        subGroupRoot.children.addAll(view, light)
+                            subGroupRoot.children.addAll(light)
+                        }
 
-                        groupRoot.children += subGroupRoot
+                        groupRoot.children += view
                     }
                 }
 
